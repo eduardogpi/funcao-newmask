@@ -1,111 +1,192 @@
-var complete = document.getElementById('complete');
-
-function myMask(input, options = { reverse: false, mask: '', fcomplete: undefined, caps: false, maxlength: 255 }) {
-
-    /* Testa se o elemento passado a funcao e um elemento do tipo input */
-    if (!input instanceof HTMLInputElement) {
-        console.log("Este elemento não é um Input!");
+/**
+ * myMask - Função de máscara para inputs sem dependência de jQuery
+ *
+ * @param {HTMLInputElement} input - Elemento input alvo
+ * @param {Object} options
+ * @param {string}   options.mask       - Padrão da máscara (ex: '99/99/9999', '[0-9]', '[A-Z]')
+ * @param {boolean}  options.reverse    - Insere caracteres da direita para esquerda (padrão: false)
+ * @param {boolean}  options.caps       - Força letras maiúsculas (padrão: false)
+ * @param {number}   options.maxlength  - Máximo de caracteres permitidos (padrão: 255)
+ * @param {Function} options.fcomplete  - Callback chamado ao completar o preenchimento
+ */
+function myMask(input, options = {}) {
+    if (!(input instanceof HTMLInputElement)) {
+        throw new Error('myMask: o primeiro argumento deve ser um HTMLInputElement.');
     }
 
-    /* Criando os objetos que nao foram criados na inicializacao da funcao */
-    options?.reverse == undefined ? options.reverse = false : false;
-    options?.mask == undefined ? options.mask = '' : '';
-    options?.caps == undefined ? options.caps = false : false;
+    // Defaults
+    const reverse   = options.reverse   ?? false;
+    const caps      = options.caps      ?? false;
+    const fcomplete = options.fcomplete ?? null;
+    const mask      = options.mask      ?? '';
+    const maskChars = mask.split('');
+    const tamMask   = maskChars.length;
+    const signals   = [',', '.', '*', '|', '\\', '/', '-', '_'];
 
-    /* Definicao da variavel do texto */
-    let txt_encadeado = input.value.split('');
-    let mask = options.mask.split('');
-    let tam_mask = mask.length;
-    let control_mask = 0;
-    let signals_mask = [',', '.', '*', '|', '\\', '/', '-', '_'];
-    input.addEventListener("keydown", function (e) {
-        /* Cancela o retorno do valor e borbulhamento */
-        e.cancelBubble = true;
-        e.returnValue = false;
+    // maxlength: se há máscara formatada, usa o tamanho dela; caso contrário, usa o informado
+    let maxlength = (mask && mask !== '[0-9]' && mask !== '[A-Z]')
+        ? tamMask
+        : (options.maxlength ?? 255);
 
-        /* Definindo a variavel da tecla pressionada */
+    let txtArray    = [];
+    let controlMask = 0;
+
+    /**
+     * Retorna o valor sem os separadores da máscara (útil para enviar ao backend)
+     */
+    input.getRawValue = () => {
+        return txtArray.filter(c => !signals.includes(c)).join('');
+    };
+
+    // ── Evento keydown ────────────────────────────────────────────────────────
+    input.addEventListener('keydown', function (e) {
+        // Permite teclas de navegação e atalhos sem interferência
+        const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Tab'];
+        if (navKeys.includes(e.key) || e.ctrlKey || e.metaKey) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
         let k = e.key;
 
-        /* Se o caps esta ativado obriga as letras em maiusculo */
-        if (options.caps) {
-            k = k.toUpperCase();
+        if (caps) k = k.toUpperCase();
+
+        // Backspace
+        if (e.code === 'Backspace') {
+            if (txtArray.length === 0) return;
+
+            // Remove o último caractere; se era separador automático, remove mais um
+            txtArray.pop();
+            controlMask--;
+
+            if (controlMask >= 0 && signals.includes(maskChars[controlMask])) {
+                txtArray.pop();
+                controlMask--;
+            }
+
+            input.value = txtArray.join('');
+            return;
         }
 
-        /*Caso o usuario aperte backspace para apagar*/
-        if (e.code == 'Backspace' && txt_encadeado.length > 0) {
-            txt_encadeado.pop();
-            control_mask--;
-        }
-        console.log(txt_encadeado.length, options.maxlength);
-        if (options.mask.split('').length > 0) {
+        // Ignora se já atingiu o máximo
+        if (txtArray.length >= maxlength) return;
 
-            if (options.reverse) {
-                if (e.code != 'Backspace' && txt_encadeado.length < options.maxlength) {
-                    txt_encadeado.unshift(k)
+        // Sem máscara definida: aceita qualquer caractere
+        if (!mask) {
+            txtArray.push(k);
+            input.value = txtArray.join('');
+            return;
+        }
+
+        // Máscara especial: apenas números
+        if (mask === '[0-9]') {
+            if (/[0-9]/.test(k)) txtArray.push(k);
+            input.value = txtArray.join('');
+            _checkComplete();
+            return;
+        }
+
+        // Máscara especial: apenas letras
+        if (mask === '[A-Z]') {
+            if (/[^0-9]/.test(k)) txtArray.push(k);
+            input.value = txtArray.join('');
+            _checkComplete();
+            return;
+        }
+
+        // Máscara formatada (ex: '99/99/9999', 'AA-999')
+        if (reverse) {
+            txtArray.unshift(k);
+        } else {
+            // Insere separadores automaticamente
+            while (controlMask < tamMask && signals.includes(maskChars[controlMask])) {
+                txtArray.push(maskChars[controlMask]);
+                controlMask++;
+            }
+
+            if (controlMask >= tamMask) {
+                input.value = txtArray.join('');
+                return;
+            }
+
+            const maskChar = maskChars[controlMask];
+
+            if (isNaN(maskChar)) {
+                // Posição da máscara espera uma letra
+                if (/[^0-9]/.test(k)) {
+                    txtArray.push(k);
+                    controlMask++;
                 }
             } else {
-                if (e.code != 'Backspace' && txt_encadeado.length < options.maxlength) {
-                    if (options.mask == '[0-9]') {
-                        let num = new RegExp(options.mask, "g")
-                        if (num.test(k)) {
-                            txt_encadeado.push(k)
-                        }
-                    }
-                    else if (options.mask == '[A-Z]') {
-                        let abc = new RegExp("[^0-9]", "g")
-                        if (abc.test(k)) {
-                            txt_encadeado.push(k);
-                        }
-                    } else {
-                        /* Definicao do tamanho do maxlegth*/
-                        options.maxlength = tam_mask;
-                        /* Uso das variaveis mask e tam_mask */
-                        if (signals_mask.includes(mask[control_mask])) {
-                            txt_encadeado.push(mask[control_mask]);
-                            control_mask++;
-                        } else {
-
-                            if (Number.isNaN(mask[control_mask])) {
-                                let abc = new RegExp("[^0-9]", "g")
-                                if (abc.test(k)) {
-                                    txt_encadeado.push(k);
-                                    control_mask++;
-                                }
-                                
-                            } else {
-                                let num = new RegExp("[0-"+mask[control_mask]+"]", "g")
-                                if (num.test(k)) {
-                                    txt_encadeado.push(k);
-                                    control_mask++;
-                                }
-                                
-                            }
-                        }
-
-
-                    }
+                // Posição da máscara espera um número (0 a maskChar)
+                const numRegex = new RegExp('[0-' + maskChar + ']');
+                if (numRegex.test(k)) {
+                    txtArray.push(k);
+                    controlMask++;
                 }
             }
-
-
         }
 
+        input.value = txtArray.join('');
+        _checkComplete();
+    });
 
-        input.value = txt_encadeado.join('');
+    // ── Evento paste ──────────────────────────────────────────────────────────
+    input.addEventListener('paste', function (e) {
+        e.preventDefault();
+        const pasted = (e.clipboardData || window.clipboardData).getData('text');
 
-        if (options?.fcomplete) {
-            if (!(options.fcomplete instanceof Function)) {
-                console.log("O objeto precisa ser uma funcão!")
-            }
-            if (options?.maxlength) {
-                if (options.maxlength == txt_encadeado.length) {
-                    options.fcomplete();
-                }
-            }
+        // Reaplica a máscara caractere a caractere sobre o valor colado
+        txtArray    = [];
+        controlMask = 0;
+        input.value = '';
+
+        for (const char of pasted) {
+            const fakeEvent = { key: char, code: '', preventDefault: () => {}, stopPropagation: () => {} };
+            // Simula keydown sinteticamente
+            _applyChar(char);
+            if (txtArray.length >= maxlength) break;
+        }
+
+        input.value = txtArray.join('');
+        _checkComplete();
+    });
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function _applyChar(k) {
+        if (caps) k = k.toUpperCase();
+        if (txtArray.length >= maxlength) return;
+        if (!mask) { txtArray.push(k); return; }
+        if (mask === '[0-9]') { if (/[0-9]/.test(k)) txtArray.push(k); return; }
+        if (mask === '[A-Z]') { if (/[^0-9]/.test(k)) txtArray.push(k); return; }
+
+        while (controlMask < tamMask && signals.includes(maskChars[controlMask])) {
+            txtArray.push(maskChars[controlMask]);
+            controlMask++;
+        }
+        if (controlMask >= tamMask) return;
+
+        const maskChar = maskChars[controlMask];
+        if (isNaN(maskChar)) {
+            if (/[^0-9]/.test(k)) { txtArray.push(k); controlMask++; }
+        } else {
+            if (new RegExp('[0-' + maskChar + ']').test(k)) { txtArray.push(k); controlMask++; }
         }
     }
-    )
 
-
+    function _checkComplete() {
+        if (fcomplete instanceof Function && txtArray.length === maxlength) {
+            fcomplete();
+        }
+    }
 }
-myMask(complete, { caps: true, mask: 'A99-999', fcomplete: function () { console.log("chegou no final!", this.element) }, maxlength: 5 });
+
+/**
+ * Aplica myMask a todos os elementos que correspondem ao seletor CSS
+ *
+ * @param {string} selector - Seletor CSS (ex: '.mask-cpf')
+ * @param {Object} options  - Mesmas opções de myMask
+ */
+function myMaskAll(selector, options = {}) {
+    document.querySelectorAll(selector).forEach(el => myMask(el, options));
+}

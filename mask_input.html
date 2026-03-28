@@ -1,17 +1,20 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Exemplo - myMaskAll</title>
 </head>
-
 <body>
-    <input type="text" name="complete" id="complete">
-</body>
-<script src="input.js">
-    
-</script>
+    <h2>Exemplos com myMaskAll</h2>
+    <label>CPF: <input class="mask-cpf" type="text" /></label><br><br>
+    <label>Data: <input class="mask-data" type="text" /></label><br><br>
+    <label>Telefone: <input class="mask-tel" type="text" /></label>
 
+    <script src="input.js"></script>
+    <script>
+        myMaskAll('.mask-cpf',  { mask: '999.999.999-99' });
+        myMaskAll('.mask-data', { mask: '99/99/9999' });
+        myMaskAll('.mask-tel',  { mask: '(99) 99999-9999' });
+    </script>
+</body>
 </html>

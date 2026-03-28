@@ -1,11 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Exemplo - myMask</title>
 </head>
 <body>
-    
+    <h2>Exemplo de máscara simples</h2>
+    <label>Placa (AAA-9999): <input id="placa" type="text" /></label>
+    <script src="input.js"></script>
+    <script>
+        myMask(document.getElementById('placa'), {
+            mask: 'AAA-9999',
+            caps: true,
+            fcomplete: function () { alert('Placa preenchida!'); }
+        });
+    </script>
 </body>
 </html>
